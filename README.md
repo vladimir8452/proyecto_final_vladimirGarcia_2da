@@ -153,3 +153,36 @@ El reporte incluye por cada código de empleado:
 - Almuerzos consumidos (titular + familiares)
 - Monto base + penalización por incumplimiento
 - **Total a descontar en planilla**
+
+---
+
+## Arquitectura limpia (los siete módulos)
+
+El proyecto incluye las capas de dominio, aplicación, adaptadores e infraestructura para los siete módulos: Usuarios, Familiares, Pensiones, Platos, Menú, Reservas y Reportes. Cada módulo tiene su entidad de dominio; los seis módulos distintos de Platos tienen casos de uso de guardar/actualizar, listar, obtener y eliminar. Platos conserva casos de uso específicos para registrar, modificar, activar y desactivar.
+
+```mermaid
+flowchart TB
+  UI[Frontend / HTTP] --> HTTP[Adaptadores HTTP]
+  HTTP --> APP[Casos de uso]
+  APP --> DOM[Dominio: entidades y contratos]
+  INF[Infraestructura / Contenedor] --> HTTP
+  INF --> PDO[Adaptadores PDO]
+  PDO -. implementa .-> DOM
+  PDO --> DB[(MySQL)]
+```
+
+| Capa | Ubicación | Responsabilidad |
+|---|---|---|
+| Dominio | `src/Domain/` | Entidades y reglas de validación sin PDO ni framework. |
+| Aplicación | `src/Application/` | Casos de uso por módulo. |
+| Adaptadores | `src/Adapters/Http/`, `src/Adapters/Persistence/` | Controladores y repositorios PDO. |
+| Infraestructura | `src/Infrastructure/` | `Contenedor.php`, composición de dependencias. |
+| Pruebas | `tests/` | Pruebas de aplicación y prueba rápida independiente. |
+
+El mapeo de entidades a tablas, la API de casos de uso, los permisos y las restricciones de trazabilidad están documentados en `docs/ARQUITECTURA_LIMPIA.md`. La API limpia está disponible en `backend/api/arquitectura.php` y usa `Contenedor::moduloController()` para componer cada módulo.
+
+**Compatibilidad:** se mantienen los endpoints históricos y controladores especializados para no romper las pantallas ni las reglas operativas ya existentes. Las operaciones de negocio con reglas específicas (inscripción mensual, reservas automáticas, cancelación, cocina y cálculo de reportes) deben seguir ejecutándose por sus flujos especializados; no se permite sustituirlas por borrados o CRUD genéricos. La migración final de las pantallas a los casos de uso nuevos requiere probar los flujos con la base de datos local.
+
+### Pruebas
+
+Ejecutar `php tests/run_smoke.php` para una comprobación rápida sin MySQL. Para la suite PHPUnit: `composer install` y luego `composer test`. La integración real debe verificarse en XAMPP con la base `restaurante_rumbo_al_cielo`.
