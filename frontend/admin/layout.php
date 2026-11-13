@@ -102,6 +102,9 @@ $base    = rtrim(BASE_URL, '/');
       </a>
 
       <span class="nav-section-title">Operación</span>
+      <a href="<?= $base ?>/frontend/admin/platos.php" class="nav-link">
+        <span class="icon">🍽️</span> Platos
+      </a>
       <a href="<?= $base ?>/frontend/admin/menus.php" class="nav-link">
         <span class="icon">📋</span> Menús
       </a>

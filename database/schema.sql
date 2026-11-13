@@ -53,23 +53,44 @@ CREATE TABLE IF NOT EXISTS calendario_operativo (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- -----------------------------------------------
--- 4. MENÚS
+-- 4. PLATOS (catálogo reutilizable)
+-- -----------------------------------------------
+CREATE TABLE IF NOT EXISTS platos (
+  id          INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  nombre      VARCHAR(180) NOT NULL,
+  tipo        ENUM('SOPA','PRINCIPAL','POSTRE') NOT NULL,
+  descripcion VARCHAR(255) NULL,
+  activo      TINYINT(1)   NOT NULL DEFAULT 1,
+  created_at  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_plato_nombre_tipo (nombre, tipo)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- -----------------------------------------------
+-- 5. MENÚS (cada menú agrupa tres platos del catálogo)
 -- -----------------------------------------------
 CREATE TABLE IF NOT EXISTS menus (
   id               INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   fecha            DATE         NOT NULL UNIQUE,
   descripcion_menu TEXT         NOT NULL,
+  sopa_id          INT UNSIGNED NULL,
+  principal_id     INT UNSIGNED NULL,
+  postre_id        INT UNSIGNED NULL,
+  -- LEGACY: textos libres del diseño anterior. Se eliminarán cuando
+  -- el código lea los platos desde el catálogo (ver migracion_platos.sql).
   sopa             VARCHAR(180) NULL,
   plato_principal  VARCHAR(180) NULL,
   postre           VARCHAR(180) NULL,
   publicado        TINYINT(1)   NOT NULL DEFAULT 1,
   created_by       INT UNSIGNED NOT NULL,
   created_at       DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (created_by) REFERENCES usuarios(id)
+  FOREIGN KEY (created_by)   REFERENCES usuarios(id),
+  CONSTRAINT fk_menu_sopa      FOREIGN KEY (sopa_id)      REFERENCES platos(id),
+  CONSTRAINT fk_menu_principal FOREIGN KEY (principal_id) REFERENCES platos(id),
+  CONSTRAINT fk_menu_postre    FOREIGN KEY (postre_id)    REFERENCES platos(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- -----------------------------------------------
--- 5. RESERVAS
+-- 6. RESERVAS
 -- -----------------------------------------------
 CREATE TABLE IF NOT EXISTS reservas (
   id                INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
@@ -90,7 +111,7 @@ CREATE TABLE IF NOT EXISTS reservas (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- -----------------------------------------------
--- 6. REPORTES MENSUALES (tabla de cierre)
+-- 7. REPORTES MENSUALES (tabla de cierre)
 -- -----------------------------------------------
 CREATE TABLE IF NOT EXISTS reportes_mensuales (
   id                       INT UNSIGNED  AUTO_INCREMENT PRIMARY KEY,
@@ -111,7 +132,7 @@ CREATE TABLE IF NOT EXISTS reportes_mensuales (
 -- -----------------------------------------------
 
 -- -----------------------------------------------
--- 7. INSCRIPCIÓN MENSUAL A PENSIÓN
+-- 8. INSCRIPCIÓN MENSUAL A PENSIÓN
 -- -----------------------------------------------
 CREATE TABLE IF NOT EXISTS inscripciones_pension (
   id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
@@ -126,7 +147,7 @@ CREATE TABLE IF NOT EXISTS inscripciones_pension (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- -----------------------------------------------
--- 8. CONFIGURACIÓN DE REGLAS DE NEGOCIO
+-- 9. CONFIGURACIÓN DE REGLAS DE NEGOCIO
 -- -----------------------------------------------
 CREATE TABLE IF NOT EXISTS configuracion_sistema (
   clave VARCHAR(80) PRIMARY KEY,
