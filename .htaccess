@@ -1,0 +1,33 @@
+# Restaurante "Rumbo al Cielo" — Apache config
+Options -Indexes
+
+# Redirigir raíz al index
+DirectoryIndex index.php
+
+# Proteger directorios sensibles
+<FilesMatch "\.(sql|md|json)$">
+  Order allow,deny
+  Deny from all
+</FilesMatch>
+
+# Bloquear acceso directo a backend
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+
+  # Permitir assets estáticos
+  RewriteCond %{REQUEST_URI} ^/frontend/assets/ [OR]
+  RewriteCond %{REQUEST_URI} \.(css|js|png|jpg|jpeg|gif|ico|svg|woff|woff2)$
+  RewriteRule ^ - [L]
+
+  # Bloquear acceso directo a backend (solo vía PHP include / fetch)
+  RewriteRule ^backend/models/ - [F,L]
+  RewriteRule ^backend/config/ - [F,L]
+</IfModule>
+
+# Seguridad de cabeceras
+<IfModule mod_headers.c>
+  Header set X-Frame-Options "SAMEORIGIN"
+  Header set X-Content-Type-Options "nosniff"
+  Header set X-XSS-Protection "1; mode=block"
+  Header set Referrer-Policy "strict-origin-when-cross-origin"
+</IfModule>
