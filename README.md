@@ -20,7 +20,7 @@ XAMPP / WAMP / Laragon son válidos para entorno local.
 
 1. **Copiar el proyecto** en `htdocs/` (XAMPP) o `www/` (WAMP).
 2. **Crear o actualizar la base de datos** en phpMyAdmin:
-   - Instalación nueva: importar `database/schema.sql`.
+   - Instalación nueva: importar `database/restaurante_rumbo_al_cielo.sql`.
    - Instalación existente: hacer una copia de seguridad y ejecutar `database/migracion_product_backlog.sql` (no importar el schema encima de una base ya creada).
    - La BD se llama `restaurante_rumbo_al_cielo`.
 3. **Configurar credenciales** en `backend/config/database.php`:
