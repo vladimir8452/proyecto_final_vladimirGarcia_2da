@@ -1,7 +1,9 @@
 <?php
+require_once __DIR__ . '/../../src/autoload.php';
+use RumboAlCielo\Domain\Ports\ReporteRepository;
 require_once __DIR__ . '/../config/database.php';
 
-class Reporte {
+class Reporte implements ReporteRepository {
     private PDO $db;
 
     public function __construct() {

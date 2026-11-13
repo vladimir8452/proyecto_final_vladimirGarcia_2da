@@ -19,6 +19,6 @@
         }
     },
     "scripts": {
-        "test": "phpunit --testdox"
+        "test": "php tests/run_unit_tests.php && php tests/run_smoke.php && php tests/run_migration_smoke.php"
     }
 }

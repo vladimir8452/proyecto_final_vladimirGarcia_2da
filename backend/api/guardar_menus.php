@@ -8,9 +8,11 @@
  */
 
 require_once __DIR__ . '/../config/database.php';
-require_once __DIR__ . '/../config/session.php';
+require_once __DIR__ . '/../../src/autoload.php';
+require_once __DIR__ . '/../models/Menu.php';
 require_once __DIR__ . '/../models/Calendario.php';
-
+require_once __DIR__ . '/../models/PlatoCatalogo.php';
+require_once __DIR__ . '/../config/session.php';
 // Solo administradores
 requireRole('ADMIN');
 
@@ -19,111 +21,29 @@ $adminId = (int) $_SESSION['usuario_id'];
 $errores = [];
 $exitos  = [];
 
-// ── Catálogo de platos (sopas, principales y postres) ─────────────────────────
+// ── Catálogo y publicación mediante caso de uso ───────────────────────────────
 $todosPlatos = [];
+$errores = [];
+$exitos = [];
 try {
-    $stmtPlatos = Database::getConnection()->query(
-        'SELECT id, nombre, tipo, activo FROM platos ORDER BY nombre'
-    );
-    foreach ($stmtPlatos->fetchAll() as $pl) {
-        $todosPlatos[(int) $pl['id']] = $pl;
-    }
+    $catalogo = new PlatoCatalogo();
+    $todosPlatos = $catalogo->listarCatalogo();
 } catch (Throwable $e) {
-    $errores[] = 'No se pudo cargar el catálogo de platos (¿ejecutaste database/migracion_platos.sql?): '
-               . '<code>' . htmlspecialchars($e->getMessage()) . '</code>';
+    $errores[] = 'No se pudo cargar el catálogo de platos: <code>' . htmlspecialchars($e->getMessage()) . '</code>';
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-
-    /*
-     * El formulario envía un array: menus[YYYY-MM-DD] = "texto del menú"
-     * Solo se procesan las fechas que tengan descripción no vacía.
-     */
-    $menus = $_POST['menus'] ?? [];
-
-    if (empty($menus) || !is_array($menus)) {
+    $selecciones = $_POST['menus'] ?? [];
+    if (empty($selecciones) || !is_array($selecciones)) {
         $errores[] = 'No se recibió ningún dato. Asegúrate de llenar al menos un día.';
     } else {
         try {
-            $db = Database::getConnection();
-
-            // Se guardan los ids de los platos elegidos y, por compatibilidad con las
-            // pantallas que aún leen texto, también sus nombres (columnas LEGACY).
-            $sql = "INSERT INTO menus (fecha, sopa_id, principal_id, postre_id, sopa, plato_principal, postre, descripcion_menu, publicado, created_by)
-                    VALUES (:fecha, :sopa_id, :principal_id, :postre_id, :sopa, :plato, :postre, :desc, 1, :admin)
-                    ON DUPLICATE KEY UPDATE sopa_id=VALUES(sopa_id), principal_id=VALUES(principal_id),
-                        postre_id=VALUES(postre_id), sopa=VALUES(sopa), plato_principal=VALUES(plato_principal),
-                        postre=VALUES(postre), descripcion_menu=VALUES(descripcion_menu), created_by=VALUES(created_by)";
-
-            $stmt       = $db->prepare($sql);
-            $calendario = new Calendario();
-            $etiquetaTipo = ['SOPA' => 'la sopa', 'PRINCIPAL' => 'el plato principal', 'POSTRE' => 'el postre'];
-
-            foreach ($menus as $fecha => $seleccion) {
-                if (!is_array($seleccion)) continue;
-
-                $ids = [
-                    'SOPA'      => (int) ($seleccion['sopa_id'] ?? 0),
-                    'PRINCIPAL' => (int) ($seleccion['principal_id'] ?? 0),
-                    'POSTRE'    => (int) ($seleccion['postre_id'] ?? 0),
-                ];
-                if (!array_filter($ids)) continue; // día sin selección: no se publica
-
-                // Validar formato YYYY-MM-DD con DateTime
-                $dt = DateTime::createFromFormat('Y-m-d', $fecha);
-                if (!$dt || $dt->format('Y-m-d') !== $fecha) {
-                    $errores[] = "Fecha inválida recibida: " . htmlspecialchars($fecha);
-                    continue;
-                }
-                $fechaCorta = $dt->format('d/m/Y');
-
-                // El menú necesita un plato de cada tipo.
-                if (in_array(0, $ids, true)) {
-                    $errores[] = "Para el {$fechaCorta} debes elegir sopa, plato principal y postre.";
-                    continue;
-                }
-
-                // Cada plato debe existir, ser del tipo correcto y estar activo.
-                $nombres = [];
-                foreach ($ids as $tipo => $platoId) {
-                    $plato = $todosPlatos[$platoId] ?? null;
-                    if (!$plato || $plato['tipo'] !== $tipo || (int) $plato['activo'] !== 1) {
-                        $errores[] = "El plato elegido para {$etiquetaTipo[$tipo]} del {$fechaCorta} no es válido o está inactivo.";
-                        continue 2;
-                    }
-                    $nombres[$tipo] = $plato['nombre'];
-                }
-
-                // Solo días hábiles (lunes a jueves) y sin feriados.
-                if (!$calendario->esDiaOperativo($fecha)) {
-                    $errores[] = 'No se puede publicar menú para ' . $fechaCorta . ': día no operativo o feriado.';
-                    continue;
-                }
-
-                $descripcionTexto = "Sopa: {$nombres['SOPA']}\nPlato principal: {$nombres['PRINCIPAL']}\nPostre: {$nombres['POSTRE']}";
-
-                $stmt->execute([
-                    ':fecha'        => $fecha,
-                    ':sopa_id'      => $ids['SOPA'],
-                    ':principal_id' => $ids['PRINCIPAL'],
-                    ':postre_id'    => $ids['POSTRE'],
-                    ':sopa'         => $nombres['SOPA'],
-                    ':plato'        => $nombres['PRINCIPAL'],
-                    ':postre'       => $nombres['POSTRE'],
-                    ':desc'         => $descripcionTexto,
-                    ':admin'        => $adminId,
-                ]);
-
-                $exitos[] = $fechaCorta . ' — ' . mb_substr($descripcionTexto, 0, 60) . (mb_strlen($descripcionTexto) > 60 ? '…' : '');
-            }
-
-        } catch (PDOException $e) {
-            // Error SQL visible en pantalla para depuración
-            $errores[] = '<strong>Error de base de datos (PDOException):</strong><br>'
-                       . '<code>' . htmlspecialchars($e->getMessage()) . '</code>';
+            $casoUso = \RumboAlCielo\Infrastructure\Contenedor::publicarMenuSemanal();
+            $resultado = $casoUso->ejecutar($selecciones, $adminId);
+            $errores = array_merge($errores, $resultado['errores']);
+            $exitos = array_merge($exitos, $resultado['exitos']);
         } catch (Throwable $e) {
-            $errores[] = '<strong>Error inesperado:</strong><br>'
-                       . '<code>' . htmlspecialchars($e->getMessage()) . '</code>';
+            $errores[] = '<strong>Error al publicar el menú:</strong><br><code>' . htmlspecialchars($e->getMessage()) . '</code>';
         }
     }
 }
@@ -159,20 +79,16 @@ $juevesStr = $diasSemana[3]->format('Y-m-d');
 // ── Cargar menús ya guardados para esta semana (para pre-rellenar) ─────────────
 $menusPrevios = [];
 try {
-    $db = Database::getConnection();
-    $stmt = $db->prepare(
-        "SELECT fecha, sopa_id, principal_id, postre_id, sopa, plato_principal, postre, descripcion_menu FROM menus
-         WHERE fecha BETWEEN :ini AND :fin AND publicado = 1"
-    );
-    $stmt->execute([':ini' => $lunesStr, ':fin' => $juevesStr]);
-    foreach ($stmt->fetchAll() as $row) {
+    $menuModel = new Menu();
+    foreach ($menuModel->listarSemana($lunesStr) as $row) {
+        if ($row['fecha'] < $lunesStr || $row['fecha'] > $juevesStr) continue;
         $menusPrevios[$row['fecha']] = [
-            'sopa_id'          => (int) ($row['sopa_id'] ?? 0),
-            'principal_id'     => (int) ($row['principal_id'] ?? 0),
-            'postre_id'        => (int) ($row['postre_id'] ?? 0),
-            'sopa'             => $row['sopa'] ?? '',
-            'plato_principal'  => $row['plato_principal'] ?? '',
-            'postre'           => $row['postre'] ?? '',
+            'sopa_id' => (int)($row['sopa_id'] ?? 0),
+            'principal_id' => (int)($row['principal_id'] ?? 0),
+            'postre_id' => (int)($row['postre_id'] ?? 0),
+            'sopa' => $row['sopa'] ?? '',
+            'plato_principal' => $row['plato_principal'] ?? '',
+            'postre' => $row['postre'] ?? '',
             'descripcion_menu' => $row['descripcion_menu'] ?? '',
         ];
     }

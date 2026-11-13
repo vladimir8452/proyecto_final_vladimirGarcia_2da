@@ -1,7 +1,9 @@
 <?php
+require_once __DIR__ . '/../../src/autoload.php';
+use RumboAlCielo\Domain\Ports\FamiliarRepository;
 require_once __DIR__ . '/../config/database.php';
 
-class Familiar {
+class Familiar implements FamiliarRepository {
     private PDO $db;
 
     public function __construct() {

@@ -1,7 +1,9 @@
 <?php
+require_once __DIR__ . '/../../src/autoload.php';
+use RumboAlCielo\Domain\Ports\MenuRepository;
 require_once __DIR__ . '/../config/database.php';
 
-class Menu {
+class Menu implements MenuRepository {
     private PDO $db;
 
     public function __construct() {
@@ -50,6 +52,20 @@ class Menu {
         $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
         $stmt->execute();
         return $stmt->fetchAll();
+    }
+
+    /** Guarda un menú semanal con referencias a platos y textos legacy. */
+    public function guardarMenuConPlatos(array $datos): void {
+        $sql = "INSERT INTO menus (fecha, sopa_id, principal_id, postre_id, sopa, plato_principal, postre, descripcion_menu, publicado, created_by)
+                VALUES (:fecha, :sopa_id, :principal_id, :postre_id, :sopa, :plato, :postre, :desc, 1, :admin)
+                ON DUPLICATE KEY UPDATE sopa_id=VALUES(sopa_id), principal_id=VALUES(principal_id),
+                    postre_id=VALUES(postre_id), sopa=VALUES(sopa), plato_principal=VALUES(plato_principal),
+                    postre=VALUES(postre), descripcion_menu=VALUES(descripcion_menu), created_by=VALUES(created_by)";
+        $stmt=$this->db->prepare($sql); $stmt->execute([
+            ':fecha'=>$datos['fecha'], ':sopa_id'=>$datos['sopa_id'], ':principal_id'=>$datos['principal_id'],
+            ':postre_id'=>$datos['postre_id'], ':sopa'=>$datos['sopa'], ':plato'=>$datos['plato'],
+            ':postre'=>$datos['postre'], ':desc'=>$datos['descripcion'], ':admin'=>$datos['admin']
+        ]);
     }
 
     /** Crea o actualiza un menú para una fecha */

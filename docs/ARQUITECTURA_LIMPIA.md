@@ -1,66 +1,66 @@
 # Arquitectura limpia — Rumbo al Cielo
 
-## Alcance
+## Alcance implementado
 
-La solución organiza los siete módulos funcionales en cuatro capas. Platos conserva sus casos de uso especializados; Usuarios, Familiares, Pensiones, Menú, Reservas y Reportes disponen de entidades, casos de uso de registrar/actualizar, listar, obtener y eliminar (el borrado físico se restringe para registros que requieren trazabilidad), un puerto de repositorio común y un adaptador PDO configurado desde la raíz de composición.
+La aplicación conserva las pantallas, rutas AJAX y la base de datos MySQL existentes. Los siete módulos usan entidades de dominio y flujos de aplicación especializados; no se utiliza un CRUD genérico paralelo para reemplazar las reglas reales del negocio.
 
 ## Diagrama
 
 ```mermaid
 flowchart TB
-  UI[Frontend / solicitudes HTTP] --> HTTP[Adaptadores HTTP]
-  HTTP --> APP[Aplicación: casos de uso por módulo]
-  APP --> DOMAIN[Dominio: entidades y contratos]
-  INF[Infraestructura: Contenedor] --> HTTP
-  INF --> PDO[Adaptadores de persistencia PDO]
-  PDO -. implementa .-> DOMAIN
-  PDO --> DB[(MySQL restaurante_rumbo_al_cielo)]
+  UI[Frontend existente] --> HTTP[Controladores / adaptadores HTTP]
+  HTTP --> APP[Casos de uso y servicios de aplicación]
+  APP --> PORTS[Puertos / interfaces del dominio]
+  INF[Contenedor de infraestructura] --> HTTP
+  INF --> ADAPT[Adaptadores de persistencia]
+  ADAPT -. implementa .-> PORTS
+  ADAPT --> DB[(MySQL: restaurante_rumbo_al_cielo)]
 ```
 
-## Carpetas
+## Capas y carpetas
 
-| Capa | Carpeta | Contenido |
+| Capa | Carpeta | Responsabilidad |
 |---|---|---|
-| Dominio | `src/Domain/` | Entidades, validaciones e interfaces de repositorio; no importa PDO ni HTTP. |
-| Aplicación | `src/Application/` | Casos de uso `Guardar`, `Listar`, `Obtener` y `Eliminar` por módulo, además de los casos específicos de Platos. |
-| Adaptadores de entrada | `src/Adapters/Http/` | Controladores que convierten solicitudes en llamadas a casos de uso y respuestas JSON. |
-| Adaptadores de salida | `src/Adapters/Persistence/` | Implementaciones PDO de los contratos del dominio. |
-| Infraestructura | `src/Infrastructure/` | `Contenedor`, único lugar que conecta base de datos, repositorios, casos de uso y controladores. |
-| Pruebas | `tests/` | Pruebas PHPUnit y prueba ejecutable sin dependencias externas. |
+| Dominio | `src/Domain/` | Entidades, reglas y contratos/puertos de repositorio. No depende de PDO ni HTTP. |
+| Aplicación | `src/Application/` | Reglas de negocio y casos de uso de los módulos. |
+| Adaptadores HTTP | `backend/controllers/`, `src/Adapters/Http/` | Reciben solicitudes, aplican el límite HTTP y llaman a casos de uso. Se conservan las firmas de los controladores antiguos para no romper el frontend. |
+| Adaptadores de persistencia | `backend/models/`, `src/Adapters/Persistence/` | Implementan los puertos y encapsulan las consultas PDO/MySQL. |
+| Infraestructura | `src/Infrastructure/Contenedor.php` | Raíz de composición: crea servicios, repositorios y controladores. |
+| Pruebas | `tests/` | Pruebas de dominio y casos de uso con dobles en memoria. |
 
-## Mapeo a la base de datos
+## Módulos y flujos
 
-| Módulo | Entidad | Tabla |
-|---|---|---|
-| Usuarios | `Domain/Usuario/Usuario.php` | `usuarios` |
-| Familiares | `Domain/Familiar/Familiar.php` | `familiares` |
-| Pensiones | `Domain/Pension/Pension.php` | `inscripciones_pension` |
-| Platos | `Domain/Plato/Plato.php` | `platos` |
-| Menú | `Domain/Menu/Menu.php` | `menus` |
-| Reservas | `Domain/Reserva/Reserva.php` | `reservas` |
-| Reportes | `Domain/Reporte/Reporte.php` | `reportes_mensuales` |
+| Módulo | Entidad | Caso de uso / servicio principal | Persistencia |
+|---|---|---|---|
+| Usuarios | `Domain/Usuario/Usuario.php` | `Application/Services/EmpleadoService.php`, `AuthService.php` | `Usuario` mediante `UsuarioRepository` |
+| Familiares | `Domain/Familiar/Familiar.php` | `Application/Services/FamiliarService.php` | `Familiar` mediante `FamiliarRepository` |
+| Pensiones | `Domain/Pension/Pension.php` | `Application/Pension/GestionarInscripcionPension.php` | `PdoPensionRepository` mediante `PensionRepository` |
+| Platos | `Domain/Plato/Plato.php` | Registrar, modificar, activar, desactivar y listar | `PdoPlatoRepository` |
+| Menú | `Domain/Menu/Menu.php` | `Application/Services/MenuService.php` y `Application/Menu/PublicarMenuSemanal.php` | `Menu` y `PlatoCatalogo` mediante sus puertos |
+| Reservas | `Domain/Reserva/Reserva.php` | `Application/Services/ReservaService.php` | `Reserva`, `Familiar`, `Calendario`, `Usuario`, `Menu` y `Configuracion` mediante puertos |
+| Reportes | `Domain/Reporte/Reporte.php` | `Application/Services/ReporteService.php` | `Reporte`, `Calendario` y `Configuracion` mediante puertos |
 
-## Composición
+## Controladores y composición
 
-`Contenedor::platoController()` construye el módulo Platos con sus casos de uso específicos.
+Los controladores HTTP de Familiares, Empleados/Usuarios, Autenticación, Menú, Reservas y Reportes ya no contienen las reglas de negocio: delegan en servicios de `src/Application/Services/`. El endpoint de pensiones delega en `PensionController` y `GestionarInscripcionPension`. El guardado del menú semanal también utiliza `PublicarMenuSemanal`; sus consultas de catálogo y escritura están encapsuladas en adaptadores de persistencia.
 
-`Contenedor::moduloController()` recibe `usuarios`, `familiares`, `pensiones`, `menus`, `reservas` o `reportes`, crea el adaptador PDO con una lista blanca de tablas/columnas y compone los casos de uso de ese módulo.
+`src/Infrastructure/Contenedor.php` es el punto de composición para construir los servicios y sus dependencias. Los modelos antiguos de `backend/models/` se mantienen como adaptadores compatibles con la estructura de tablas actual y también implementan los contratos definidos en `src/Domain/Ports/`.
 
-Las consultas usan parámetros preparados. Los nombres de tabla y columnas no vienen de la petición HTTP, sino de una configuración fija en el contenedor. El controlador no devuelve el campo `contrasena`; el caso de uso de Usuario convierte contraseñas en texto plano a hash antes de persistirlas.
+La autenticación verifica credenciales en el caso de uso; el controlador HTTP administra la sesión y la redirección. El envío de notificaciones de reserva se ejecuta en el adaptador HTTP y no dentro del caso de uso.
 
-## API de la capa limpia
+## Base de datos
 
-Se agregó `backend/api/arquitectura.php` para ejecutar los casos de uso desde HTTP:
+Se conserva la base `restaurante_rumbo_al_cielo` y el archivo `database/restaurante_rumbo_al_cielo.sql`. No se requiere crear una segunda base ni cambiar nombres de tablas para esta migración. Los adaptadores usan consultas preparadas y los nombres de tablas/columnas se mantienen definidos en el código.
 
-- `GET arquitectura.php?modulo=usuarios&accion=listar`
-- `GET arquitectura.php?modulo=familiares&accion=obtener&id=1`
-- `POST arquitectura.php` con `modulo=menus`, `accion=guardar` y los campos del menú.
-- `POST arquitectura.php` con `modulo=reservas`, `accion=guardar` y los campos de la reserva.
+## Verificación
 
-Los permisos se verifican por módulo y se impide el borrado físico genérico de pensiones, reservas y reportes para preservar trazabilidad. Las reglas específicas de inscripción mensual, cancelación por hora límite, corte de cocina, publicación de menú y cálculo de descuentos deben ejecutarse mediante sus operaciones de negocio existentes, no mediante CRUD genérico.
+Desde la raíz del proyecto:
 
-## Compatibilidad y validación pendiente
+```bash
+php tests/run_smoke.php
+php tests/run_migration_smoke.php
+```
 
-Los endpoints históricos `backend/api/*.php` y los controladores especializados se conservan para no romper los formularios y las reglas del sistema que ya estaban implementadas. El nuevo adaptador HTTP expone los casos de uso de la arquitectura limpia; la sustitución total de cada operación especializada del frontend debe hacerse de forma controlada y validando los flujos reales contra la base de datos local.
+Para la suite PHPUnit, instalar dependencias con `composer install` y ejecutar `composer test`.
 
-No se afirma una prueba de integración contra MySQL en este paquete: el entorno de construcción no dispone de un servidor ni de un controlador PDO MySQL. La prueba local `php tests/run_smoke.php` valida las seis entidades/casos de uso nuevos, la persistencia en memoria, reglas básicas y hash de contraseña. La prueba completa PHPUnit se ejecuta con `composer install` y `composer test`.
+La revisión automatizada de este paquete comprobó la sintaxis PHP y ejecutó las dos pruebas rápidas. La integración real con MySQL debe confirmarse en el XAMPP local del estudiante, porque el entorno donde se preparó el ZIP no tiene controlador PDO MySQL ni servidor MySQL. No se afirma que se haya ejecutado una prueba real contra la base de datos del usuario.

@@ -1,7 +1,9 @@
 <?php
+require_once __DIR__ . '/../../src/autoload.php';
+use RumboAlCielo\Domain\Ports\ReservaRepository;
 require_once __DIR__ . '/../config/database.php';
 
-class Reserva {
+class Reserva implements ReservaRepository {
     private PDO $db;
 
     public function __construct() {

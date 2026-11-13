@@ -1,7 +1,9 @@
 <?php
+require_once __DIR__ . '/../../src/autoload.php';
+use RumboAlCielo\Domain\Ports\CalendarioRepository;
 require_once __DIR__ . '/../config/database.php';
 
-class Calendario {
+class Calendario implements CalendarioRepository {
     private PDO $db;
 
     public function __construct() {

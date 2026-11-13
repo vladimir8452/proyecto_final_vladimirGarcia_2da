@@ -158,31 +158,50 @@ El reporte incluye por cada código de empleado:
 
 ## Arquitectura limpia (los siete módulos)
 
-El proyecto incluye las capas de dominio, aplicación, adaptadores e infraestructura para los siete módulos: Usuarios, Familiares, Pensiones, Platos, Menú, Reservas y Reportes. Cada módulo tiene su entidad de dominio; los seis módulos distintos de Platos tienen casos de uso de guardar/actualizar, listar, obtener y eliminar. Platos conserva casos de uso específicos para registrar, modificar, activar y desactivar.
+Se migraron los controladores de Usuarios, Familiares, Menú, Reservas y Reportes para delegar en servicios de aplicación. Pensiones y la publicación semanal de menús cuentan con casos de uso específicos y repositorios PDO. Platos conserva sus casos de uso propios. Los formularios y endpoints existentes mantienen sus rutas para evitar romper la interfaz.
 
-```mermaid
-flowchart TB
-  UI[Frontend / HTTP] --> HTTP[Adaptadores HTTP]
-  HTTP --> APP[Casos de uso]
-  APP --> DOM[Dominio: entidades y contratos]
-  INF[Infraestructura / Contenedor] --> HTTP
-  INF --> PDO[Adaptadores PDO]
-  PDO -. implementa .-> DOM
-  PDO --> DB[(MySQL)]
-```
+Las entidades y puertos están en `src/Domain/`; los casos de uso están en `src/Application/`; los adaptadores HTTP están en `backend/controllers/` y `src/Adapters/Http/`; los adaptadores de persistencia están en `backend/models/` y `src/Adapters/Persistence/`; la composición está en `src/Infrastructure/Contenedor.php`. El detalle está en `docs/ARQUITECTURA_LIMPIA.md`.
 
-| Capa | Ubicación | Responsabilidad |
-|---|---|---|
-| Dominio | `src/Domain/` | Entidades y reglas de validación sin PDO ni framework. |
-| Aplicación | `src/Application/` | Casos de uso por módulo. |
-| Adaptadores | `src/Adapters/Http/`, `src/Adapters/Persistence/` | Controladores y repositorios PDO. |
-| Infraestructura | `src/Infrastructure/` | `Contenedor.php`, composición de dependencias. |
-| Pruebas | `tests/` | Pruebas de aplicación y prueba rápida independiente. |
-
-El mapeo de entidades a tablas, la API de casos de uso, los permisos y las restricciones de trazabilidad están documentados en `docs/ARQUITECTURA_LIMPIA.md`. La API limpia está disponible en `backend/api/arquitectura.php` y usa `Contenedor::moduloController()` para componer cada módulo.
-
-**Compatibilidad:** se mantienen los endpoints históricos y controladores especializados para no romper las pantallas ni las reglas operativas ya existentes. Las operaciones de negocio con reglas específicas (inscripción mensual, reservas automáticas, cancelación, cocina y cálculo de reportes) deben seguir ejecutándose por sus flujos especializados; no se permite sustituirlas por borrados o CRUD genéricos. La migración final de las pantallas a los casos de uso nuevos requiere probar los flujos con la base de datos local.
+**Importante:** la sintaxis PHP y las pruebas rápidas están verificadas. La prueba de integración real contra MySQL debe ejecutarse en el XAMPP local, ya que el entorno de preparación no tiene PDO MySQL. No se modifica ni se reemplaza la base de datos existente.
 
 ### Pruebas
 
-Ejecutar `php tests/run_smoke.php` para una comprobación rápida sin MySQL. Para la suite PHPUnit: `composer install` y luego `composer test`. La integración real debe verificarse en XAMPP con la base `restaurante_rumbo_al_cielo`.
+```bash
+php tests/run_smoke.php
+php tests/run_migration_smoke.php
+```
+
+Para PHPUnit: `composer install` y `composer test`.
+
+
+## Pruebas unitarias
+
+El proyecto incluye una suite unitaria ejecutable sin instalar PHPUnit y sin conectarse a MySQL. Los repositorios se sustituyen por dobles en memoria para probar las reglas de la capa de aplicación de forma aislada.
+
+### Ejecutar pruebas
+
+Desde la carpeta raíz del proyecto: 
+
+```bash
+php tests/run_unit_tests.php
+php tests/run_smoke.php
+php tests/run_migration_smoke.php
+```
+
+También puedes ejecutar todo el conjunto con Composer:
+
+```bash
+composer test
+```
+
+### Cobertura incluida
+
+- **Usuarios:** autenticación correcta/incorrecta, validación y registro de empleados duplicados.
+- **Familiares:** alta, validación del tipo de titular, parentesco y control de pertenencia.
+- **Pensiones:** validación de mes y tipo de cuenta, inscripción y generación automática de reservas.
+- **Platos:** registro, duplicidad, activación/desactivación y protección de platos usados en menús vigentes.
+- **Menú:** publicación de selección completa y rechazo de selección incompleta.
+- **Reservas:** rechazo de fechas pasadas, creación y prevención de reservas duplicadas.
+- **Reportes:** cálculo del mínimo de pensión, importes de familiares y persistencia mediante el puerto.
+
+Los casos de prueba están en `tests/run_unit_tests.php`. El reporte de la ejecución comprobada se encuentra en `tests/REPORTE_EJECUCION.md`. Estas son pruebas unitarias con dobles en memoria; no sustituyen una prueba de integración contra el MySQL local.
